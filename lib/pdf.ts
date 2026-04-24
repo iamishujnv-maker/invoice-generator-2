@@ -27,6 +27,7 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
   const GRAY: [number, number, number] = [120, 120, 120]
   const LIGHT: [number, number, number] = [220, 220, 220]
   const BG: [number, number, number] = [247, 247, 248]
+  const ACCENT: [number, number, number] = [34, 83, 173]
 
   const sym = getCurrencySymbol(invoice.currency || 'INR')
   const locale = (invoice.currency || 'INR') === 'INR' ? 'en-IN' : 'en-US'
@@ -44,105 +45,93 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
     doc.setTextColor(...color)
   }
 
-  // ── HEADER BAND ───────────────────────────────────────────────
-  let y = 22
+  const drawInfoCard = (x: number, top: number, width: number, label: string, value: string): void => {
+    doc.setFillColor(...BG)
+    doc.setDrawColor(...LIGHT)
+    doc.rect(x, top, width, 15, 'FD')
+    setFont(7.5, 'bold', GRAY)
+    doc.text(label, x + 4, top + 5.5)
+    setFont(10.5, 'bold', BLACK)
+    doc.text(value, x + 4, top + 11)
+  }
+
+  const drawPartyCard = (
+    x: number,
+    top: number,
+    width: number,
+    title: string,
+    name: string,
+    rows: string[]
+  ): number => {
+    const contentWidth = width - 8
+    const wrappedRows = rows.flatMap((row) => doc.splitTextToSize(row, contentWidth))
+    const contentHeight = wrappedRows.length * 4.5
+    const cardHeight = 18 + contentHeight
+
+    doc.setDrawColor(...LIGHT)
+    doc.setFillColor(...BG)
+    doc.rect(x, top, width, cardHeight, 'FD')
+
+    setFont(8, 'bold', GRAY)
+    doc.text(title, x + 4, top + 5.5)
+    setFont(11, 'bold', BLACK)
+    doc.text(name || '—', x + 4, top + 11)
+    setFont(9, 'normal', DARK)
+    if (wrappedRows.length > 0) {
+      doc.text(wrappedRows, x + 4, top + 16)
+    }
+
+    return cardHeight
+  }
+
+  // ── HEADER ────────────────────────────────────────────────────
+  let y = 18
+  doc.setFillColor(...ACCENT)
+  doc.rect(ML, y, CW, 1.8, 'F')
+  y += 8
+
   setFont(26, 'bold', BLACK)
   doc.text('INVOICE', ML, y)
 
-  setFont(11, 'normal', GRAY)
-  doc.text(`# ${invoice.invoice_number}`, W - MR, y - 2, { align: 'right' })
+  setFont(10, 'normal', GRAY)
+  doc.text(`Invoice #${invoice.invoice_number}`, W - MR, y - 3, { align: 'right' })
+  doc.text(`Status: ${(invoice.status || 'draft').toUpperCase()}`, W - MR, y + 2, { align: 'right' })
 
-  y += 12
+  y += 10
 
-  // Divider
   doc.setDrawColor(...LIGHT)
   doc.setLineWidth(0.3)
   doc.line(ML, y, W - MR, y)
-  y += 8
+  y += 7
 
-  // ── FROM (seller) ────────────────────────────────────────────
-  setFont(8, 'bold', GRAY)
-  doc.text('FROM', ML, y)
-  y += 5
+  // ── PARTY DETAILS ─────────────────────────────────────────────
+  const colGap = 6
+  const cardW = (CW - colGap) / 2
+  const sellerRows = [
+    invoice.seller_pan ? `PAN: ${invoice.seller_pan}` : '',
+    invoice.seller_gstin ? `GSTIN: ${invoice.seller_gstin}` : '',
+    invoice.seller_mobile ? `Mob: ${invoice.seller_mobile}` : '',
+    invoice.seller_email || '',
+    invoice.seller_address || '',
+  ].filter(Boolean)
+  const clientRows = [
+    invoice.client_gstin ? `GSTIN: ${invoice.client_gstin}` : '',
+    invoice.client_mobile ? `Mob: ${invoice.client_mobile}` : '',
+    invoice.client_email ? `Email: ${invoice.client_email}` : '',
+    invoice.client_address || '',
+  ].filter(Boolean)
 
-  setFont(12, 'bold', BLACK)
-  doc.text(invoice.seller_name || '—', ML, y)
-  y += 5.5
+  const sellerCardHeight = drawPartyCard(ML, y, cardW, 'FROM', invoice.seller_name, sellerRows)
+  const clientCardHeight = drawPartyCard(ML + cardW + colGap, y, cardW, 'BILL TO', invoice.client_name, clientRows)
+  y += Math.max(sellerCardHeight, clientCardHeight) + 8
 
-  setFont(9, 'normal', DARK)
-  if (invoice.seller_pan) {
-    doc.text(`PAN: ${invoice.seller_pan}`, ML, y)
-    y += 4.5
-  }
-  if (invoice.seller_gstin) {
-    doc.text(`GSTIN: ${invoice.seller_gstin}`, ML, y)
-    y += 4.5
-  }
-  if (invoice.seller_mobile) {
-    doc.text(`Mob: ${invoice.seller_mobile}`, ML, y)
-    y += 4.5
-  }
-  if (invoice.seller_email) {
-    doc.text(invoice.seller_email, ML, y)
-    y += 4.5
-  }
-  if (invoice.seller_address) {
-    const lines = doc.splitTextToSize(invoice.seller_address, CW - 20)
-    doc.text(lines, ML, y)
-    y += lines.length * 4.5
-  }
-
-  y += 8
-
-  // ── BILL TO ───────────────────────────────────────────────────
-  setFont(8, 'bold', GRAY)
-  doc.text('BILL TO', ML, y)
-  y += 5
-
-  setFont(12, 'bold', BLACK)
-  doc.text(invoice.client_name || '—', ML, y)
-  y += 5.5
-
-  setFont(9, 'normal', DARK)
-  if (invoice.client_gstin) {
-    doc.text(`GSTIN: ${invoice.client_gstin}`, ML, y)
-    y += 4.5
-  }
-  if (invoice.client_address) {
-    const lines = doc.splitTextToSize(invoice.client_address, CW - 20)
-    doc.text(lines, ML, y)
-    y += lines.length * 4.5
-  }
-  if (invoice.client_mobile) {
-    doc.text(`Mob: ${invoice.client_mobile}`, ML, y)
-    y += 4.5
-  }
-  if (invoice.client_email) {
-    doc.text(`Email: ${invoice.client_email}`, ML, y)
-    y += 4.5
-  }
-
-  y += 8
-
-  // ── DATE / BALANCE DUE strip ──────────────────────────────────
-  const box1X = ML
-  const box2X = ML + CW / 2 + 4
-  const boxW = CW / 2 - 4
-  const boxH = 16
-
-  doc.setFillColor(...BG)
-  doc.rect(box1X, y, boxW, boxH, 'F')
-  doc.rect(box2X, y, boxW, boxH, 'F')
-
-  setFont(7.5, 'bold', GRAY)
-  doc.text('DATE', box1X + 4, y + 6)
-  doc.text('BALANCE DUE', box2X + 4, y + 6)
-
-  setFont(11, 'bold', BLACK)
-  doc.text(formatDate(invoice.issue_date), box1X + 4, y + 12)
-  doc.text(money(invoice.total_amount), box2X + 4, y + 12)
-
-  y += boxH + 10
+  // ── DATE / DUE / BALANCE STRIP ────────────────────────────────
+  const infoGap = 4
+  const infoW = (CW - infoGap * 2) / 3
+  drawInfoCard(ML, y, infoW, 'ISSUE DATE', formatDate(invoice.issue_date))
+  drawInfoCard(ML + infoW + infoGap, y, infoW, 'DUE DATE', formatDate(invoice.due_date))
+  drawInfoCard(ML + (infoW + infoGap) * 2, y, infoW, 'BALANCE DUE', money(invoice.total_amount))
+  y += 23
 
   // ── ITEMS TABLE ───────────────────────────────────────────────
   const rows = (invoice.items || []).map((item) => [
