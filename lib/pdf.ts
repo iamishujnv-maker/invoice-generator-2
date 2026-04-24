@@ -1,10 +1,20 @@
 import { Invoice } from '@/types'
+import { DEJAVU_SANS_REGULAR, DEJAVU_SANS_BOLD } from './fonts/dejavu'
 
 export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
   const jsPDF = (await import('jspdf')).default
   const autoTable = (await import('jspdf-autotable')).default
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+  // ── Embed Unicode-capable font (DejaVu Sans) ─────────────────
+  // This is what lets us render ₹, €, £, etc. Helvetica (default)
+  // doesn't include these glyphs so they show as □ (tofu).
+  doc.addFileToVFS('DejaVuSans.ttf', DEJAVU_SANS_REGULAR)
+  doc.addFileToVFS('DejaVuSans-Bold.ttf', DEJAVU_SANS_BOLD)
+  doc.addFont('DejaVuSans.ttf', 'DejaVu', 'normal')
+  doc.addFont('DejaVuSans-Bold.ttf', 'DejaVu', 'bold')
+
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
   const ML = 18
@@ -12,11 +22,11 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
   const CW = W - ML - MR
 
   // Colors
-  const BLACK: [number, number, number] = [20, 20, 20]
-  const DARK: [number, number, number] = [50, 50, 50]
+  const BLACK: [number, number, number] = [25, 25, 25]
+  const DARK: [number, number, number] = [55, 55, 55]
   const GRAY: [number, number, number] = [120, 120, 120]
-  const LIGHT: [number, number, number] = [230, 230, 230]
-  const BG: [number, number, number] = [248, 248, 248]
+  const LIGHT: [number, number, number] = [220, 220, 220]
+  const BG: [number, number, number] = [247, 247, 248]
 
   const sym = getCurrencySymbol(invoice.currency || 'INR')
   const locale = (invoice.currency || 'INR') === 'INR' ? 'en-IN' : 'en-US'
@@ -29,24 +39,33 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
     style: 'normal' | 'bold' = 'normal',
     color: [number, number, number] = DARK
   ) => {
-    doc.setFont('helvetica', style)
+    doc.setFont('DejaVu', style)
     doc.setFontSize(size)
     doc.setTextColor(...color)
   }
 
-  // ── HEADER: "INVOICE" title + invoice number ──────────────────
+  // ── HEADER BAND ───────────────────────────────────────────────
   let y = 22
-
-  setFont(28, 'bold', BLACK)
+  setFont(26, 'bold', BLACK)
   doc.text('INVOICE', ML, y)
 
-  setFont(12, 'normal', GRAY)
-  doc.text(`# ${invoice.invoice_number}`, W - MR, y, { align: 'right' })
+  setFont(11, 'normal', GRAY)
+  doc.text(`# ${invoice.invoice_number}`, W - MR, y - 2, { align: 'right' })
 
-  y += 14
+  y += 12
 
-  // ── FROM BLOCK (seller) ──────────────────────────────────────
-  setFont(13, 'bold', BLACK)
+  // Divider
+  doc.setDrawColor(...LIGHT)
+  doc.setLineWidth(0.3)
+  doc.line(ML, y, W - MR, y)
+  y += 8
+
+  // ── FROM (seller) ────────────────────────────────────────────
+  setFont(8, 'bold', GRAY)
+  doc.text('FROM', ML, y)
+  y += 5
+
+  setFont(12, 'bold', BLACK)
   doc.text(invoice.seller_name || '—', ML, y)
   y += 5.5
 
@@ -60,7 +79,7 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
     y += 4.5
   }
   if (invoice.seller_mobile) {
-    doc.text(`Mob No: ${invoice.seller_mobile}`, ML, y)
+    doc.text(`Mob: ${invoice.seller_mobile}`, ML, y)
     y += 4.5
   }
   if (invoice.seller_email) {
@@ -73,16 +92,16 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
     y += lines.length * 4.5
   }
 
-  y += 6
+  y += 8
 
   // ── BILL TO ───────────────────────────────────────────────────
-  setFont(9, 'bold', DARK)
-  doc.text('Bill To:', ML, y)
-  y += 5.5
-
-  setFont(11, 'bold', BLACK)
-  doc.text(invoice.client_name || '—', ML, y)
+  setFont(8, 'bold', GRAY)
+  doc.text('BILL TO', ML, y)
   y += 5
+
+  setFont(12, 'bold', BLACK)
+  doc.text(invoice.client_name || '—', ML, y)
+  y += 5.5
 
   setFont(9, 'normal', DARK)
   if (invoice.client_gstin) {
@@ -95,7 +114,7 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
     y += lines.length * 4.5
   }
   if (invoice.client_mobile) {
-    doc.text(`Mob No: ${invoice.client_mobile}`, ML, y)
+    doc.text(`Mob: ${invoice.client_mobile}`, ML, y)
     y += 4.5
   }
   if (invoice.client_email) {
@@ -105,19 +124,25 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
 
   y += 8
 
-  // ── DATE & BALANCE DUE — two-column layout ────────────────────
-  const col2X = W / 2 + 10
+  // ── DATE / BALANCE DUE strip ──────────────────────────────────
+  const box1X = ML
+  const box2X = ML + CW / 2 + 4
+  const boxW = CW / 2 - 4
+  const boxH = 16
 
-  setFont(9, 'normal', DARK)
-  doc.text('Date:', ML, y)
-  doc.text('Balance Due:', col2X, y)
+  doc.setFillColor(...BG)
+  doc.rect(box1X, y, boxW, boxH, 'F')
+  doc.rect(box2X, y, boxW, boxH, 'F')
 
-  y += 5.5
+  setFont(7.5, 'bold', GRAY)
+  doc.text('DATE', box1X + 4, y + 6)
+  doc.text('BALANCE DUE', box2X + 4, y + 6)
+
   setFont(11, 'bold', BLACK)
-  doc.text(formatDate(invoice.issue_date), ML, y)
-  doc.text(money(invoice.total_amount), col2X, y)
+  doc.text(formatDate(invoice.issue_date), box1X + 4, y + 12)
+  doc.text(money(invoice.total_amount), box2X + 4, y + 12)
 
-  y += 10
+  y += boxH + 10
 
   // ── ITEMS TABLE ───────────────────────────────────────────────
   const rows = (invoice.items || []).map((item) => [
@@ -133,83 +158,93 @@ export async function generateInvoicePDF(invoice: Invoice): Promise<void> {
     body: rows,
     margin: { left: ML, right: MR },
     styles: {
-      font: 'helvetica',
+      font: 'DejaVu',
+      fontStyle: 'normal',
       fontSize: 9.5,
-      cellPadding: { top: 3.5, right: 4, bottom: 3.5, left: 4 },
+      cellPadding: { top: 4, right: 5, bottom: 4, left: 5 },
       textColor: DARK,
       lineColor: LIGHT,
-      lineWidth: 0.2,
+      lineWidth: 0.15,
     },
     headStyles: {
-      fillColor: BG,
-      textColor: DARK,
+      fillColor: BLACK,
+      textColor: [255, 255, 255],
+      font: 'DejaVu',
       fontStyle: 'bold',
-      fontSize: 9,
-      lineColor: LIGHT,
-      lineWidth: 0.2,
+      fontSize: 8.5,
+      cellPadding: { top: 4, right: 5, bottom: 4, left: 5 },
+      lineColor: BLACK,
+      lineWidth: 0,
+    },
+    bodyStyles: {
+      font: 'DejaVu',
     },
     columnStyles: {
       0: { cellWidth: 'auto' },
       1: { halign: 'center', cellWidth: 22 },
-      2: { halign: 'right', cellWidth: 35 },
-      3: { halign: 'right', cellWidth: 35 },
+      2: { halign: 'right', cellWidth: 32 },
+      3: { halign: 'right', cellWidth: 32, fontStyle: 'bold', textColor: BLACK },
     },
+    alternateRowStyles: { fillColor: [252, 252, 253] },
     tableLineColor: LIGHT,
-    tableLineWidth: 0.2,
+    tableLineWidth: 0.15,
   })
 
   // @ts-expect-error jsPDF-autotable adds lastAutoTable
-  y = doc.lastAutoTable.finalY + 6
+  y = doc.lastAutoTable.finalY + 8
 
-  // ── TOTALS ROW ────────────────────────────────────────────────
+  // ── TOTALS ────────────────────────────────────────────────────
   const totX = W - MR - 70
+  const totW = 70
 
-  // Subtotal/tax/discount rows (only if needed)
-  if (invoice.tax > 0 || invoice.discount > 0) {
-    setFont(9, 'normal', GRAY)
-    doc.text('Subtotal', totX, y)
-    setFont(9, 'normal', DARK)
-    doc.text(money(invoice.subtotal), W - MR, y, { align: 'right' })
-    y += 5.5
-
-    if (invoice.tax > 0) {
-      setFont(9, 'normal', GRAY)
-      doc.text(`Tax (${invoice.tax}%)`, totX, y)
-      setFont(9, 'normal', DARK)
-      doc.text(money((invoice.subtotal * invoice.tax) / 100), W - MR, y, { align: 'right' })
-      y += 5.5
-    }
-
-    if (invoice.discount > 0) {
-      const d =
-        invoice.discount_type === 'percent'
-          ? (invoice.subtotal * invoice.discount) / 100
-          : invoice.discount
-      setFont(9, 'normal', GRAY)
-      doc.text('Discount', totX, y)
-      setFont(9, 'normal', DARK)
-      doc.text(`−${money(d)}`, W - MR, y, { align: 'right' })
-      y += 5.5
-    }
-
-    y += 1
+  const totalRow = (label: string, value: string, bold = false) => {
+    setFont(bold ? 10 : 9, bold ? 'bold' : 'normal', bold ? BLACK : GRAY)
+    doc.text(label, totX, y)
+    setFont(bold ? 10 : 9, bold ? 'bold' : 'normal', bold ? BLACK : DARK)
+    doc.text(value, W - MR, y, { align: 'right' })
+    y += bold ? 7 : 5.5
   }
 
-  // Final Total row — right-aligned, bold
+  totalRow('Subtotal', money(invoice.subtotal))
+
+  if (invoice.tax > 0) {
+    totalRow(`Tax (${invoice.tax}%)`, money((invoice.subtotal * invoice.tax) / 100))
+  }
+
+  if (invoice.discount > 0) {
+    const d =
+      invoice.discount_type === 'percent'
+        ? (invoice.subtotal * invoice.discount) / 100
+        : invoice.discount
+    const dLabel =
+      invoice.discount_type === 'percent'
+        ? `Discount (${invoice.discount}%)`
+        : 'Discount'
+    setFont(9, 'normal', GRAY)
+    doc.text(dLabel, totX, y)
+    setFont(9, 'normal', [16, 150, 100])
+    doc.text(`− ${money(d)}`, W - MR, y, { align: 'right' })
+    y += 5.5
+  }
+
+  // Divider
   doc.setDrawColor(...LIGHT)
   doc.setLineWidth(0.3)
-  doc.line(totX, y, W - MR, y)
-  y += 5.5
+  doc.line(totX, y - 1, W - MR, y - 1)
+  y += 2.5
 
-  setFont(11, 'bold', BLACK)
-  doc.text('Total:', totX, y)
-  doc.text(money(invoice.total_amount), W - MR, y, { align: 'right' })
-  y += 12
+  // Total row — black background bar
+  doc.setFillColor(...BLACK)
+  doc.rect(totX - 4, y - 5, totW + 4, 10, 'F')
+  setFont(11, 'bold', [255, 255, 255])
+  doc.text('Total', totX, y + 1.5)
+  doc.text(money(invoice.total_amount), W - MR - 1, y + 1.5, { align: 'right' })
+  y += 16
 
   // ── NOTES ─────────────────────────────────────────────────────
   if (invoice.notes) {
-    setFont(9, 'bold', DARK)
-    doc.text('Notes', ML, y)
+    setFont(8, 'bold', GRAY)
+    doc.text('NOTES', ML, y)
     y += 5
 
     setFont(9, 'normal', DARK)

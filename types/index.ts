@@ -77,3 +77,18 @@ export const CURRENCIES = [
   { code: 'CAD', symbol: 'CA$', label: 'Canadian Dollar' },
   { code: 'AUD', symbol: 'A$', label: 'Australian Dollar' },
 ]
+
+export interface UserSettings {
+  user_id: string
+  default_currency: string
+  default_tax: number
+  default_notes: string
+  seller_name: string
+  seller_email: string
+  seller_address: string
+  seller_pan: string
+  seller_gstin: string
+  seller_mobile: string
+  created_at?: string
+  updated_at?: string
+}

@@ -21,6 +21,7 @@ export default function Navbar({ email }: { email?: string }) {
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/invoices/new', label: 'New Invoice' },
+    { href: '/settings', label: 'Settings' },
   ]
 
   return (

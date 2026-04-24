@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { generateInvoiceNumber, calculateInvoiceTotals } from '@/lib/utils'
-import { InvoiceFormData, InvoiceItem, Invoice, CURRENCIES } from '@/types'
+import { InvoiceFormData, InvoiceItem, Invoice, CURRENCIES, UserSettings } from '@/types'
 
 // ─────────────────────────────────────────────────────────────
 // Defined OUTSIDE the component so their identity is stable
@@ -40,20 +40,21 @@ const g2 = 'grid grid-cols-1 sm:grid-cols-2 gap-4'
 interface Props {
   userId: string
   existing?: Invoice & { items?: InvoiceItem[] }
+  settings?: UserSettings | null
 }
 
-export default function InvoiceForm({ userId, existing }: Props) {
+export default function InvoiceForm({ userId, existing, settings }: Props) {
   const router = useRouter()
   const isEdit = !!existing
 
   const [form, setForm] = useState<InvoiceFormData>({
     invoice_number: existing?.invoice_number ?? generateInvoiceNumber(),
-    seller_name: existing?.seller_name ?? '',
-    seller_email: existing?.seller_email ?? '',
-    seller_address: existing?.seller_address ?? '',
-    seller_pan: existing?.seller_pan ?? '',
-    seller_gstin: existing?.seller_gstin ?? '',
-    seller_mobile: existing?.seller_mobile ?? '',
+    seller_name: existing?.seller_name ?? settings?.seller_name ?? '',
+    seller_email: existing?.seller_email ?? settings?.seller_email ?? '',
+    seller_address: existing?.seller_address ?? settings?.seller_address ?? '',
+    seller_pan: existing?.seller_pan ?? settings?.seller_pan ?? '',
+    seller_gstin: existing?.seller_gstin ?? settings?.seller_gstin ?? '',
+    seller_mobile: existing?.seller_mobile ?? settings?.seller_mobile ?? '',
     client_name: existing?.client_name ?? '',
     client_email: existing?.client_email ?? '',
     client_address: existing?.client_address ?? '',
@@ -61,12 +62,12 @@ export default function InvoiceForm({ userId, existing }: Props) {
     client_mobile: existing?.client_mobile ?? '',
     issue_date: existing?.issue_date ?? today,
     due_date: existing?.due_date ?? thirtyDays,
-    currency: existing?.currency ?? 'INR',
+    currency: existing?.currency ?? settings?.default_currency ?? 'INR',
     items: existing?.items?.length ? existing.items : [defaultItem()],
-    tax: existing?.tax ?? 0,
+    tax: existing?.tax ?? settings?.default_tax ?? 0,
     discount: existing?.discount ?? 0,
     discount_type: existing?.discount_type ?? 'percent',
-    notes: existing?.notes ?? '',
+    notes: existing?.notes ?? settings?.default_notes ?? '',
     status: existing?.status ?? 'draft',
   })
 
