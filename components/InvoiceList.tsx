@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { generateInvoicePDF } from '@/lib/pdf'
-import StatusBadge from '@/components/ui/StatusBadge'
 import EmptyState from '@/components/ui/EmptyState'
 import { Invoice } from '@/types'
 
@@ -58,8 +57,8 @@ export default function InvoiceList({ invoices: initial }: { invoices: Invoice[]
 
   const stats = {
     total: invoices.length,
-    paid: invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0),
-    unpaid: invoices.filter((i) => i.status === 'unpaid').reduce((s, i) => s + i.total_amount, 0),
+    paid: invoices.filter((i) => i.status === 'paid').length,
+    unpaid: invoices.filter((i) => i.status === 'unpaid').length,
   }
 
   return (
@@ -68,8 +67,8 @@ export default function InvoiceList({ invoices: initial }: { invoices: Invoice[]
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Total Invoices', value: stats.total.toString(), icon: '📄', color: 'text-ink-900' },
-          { label: 'Total Paid', value: formatCurrency(stats.paid), icon: '✅', color: 'text-emerald-600' },
-          { label: 'Outstanding', value: formatCurrency(stats.unpaid), icon: '⏳', color: 'text-amber-600' },
+          { label: 'Paid', value: stats.paid.toString(), icon: '✅', color: 'text-emerald-600' },
+          { label: 'Unpaid', value: stats.unpaid.toString(), icon: '⏳', color: 'text-amber-600' },
         ].map((s) => (
           <div key={s.label} className="card p-5">
             <div className="flex items-center justify-between mb-1">
@@ -142,7 +141,7 @@ export default function InvoiceList({ invoices: initial }: { invoices: Invoice[]
                       <div className="font-medium text-ink-900">{inv.client_name}</div>
                     </td>
                     <td className="px-5 py-3.5 font-semibold text-ink-900 whitespace-nowrap">
-                      {formatCurrency(inv.total_amount)}
+                      {formatCurrency(inv.total_amount, inv.currency || 'INR')}
                     </td>
                     <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">
                       {formatDate(inv.issue_date)}
@@ -154,13 +153,18 @@ export default function InvoiceList({ invoices: initial }: { invoices: Invoice[]
                       <select
                         value={inv.status}
                         onChange={(e) => handleStatusChange(inv.id, e.target.value)}
-                        className="text-xs font-semibold rounded-full px-2 py-0.5 border-0 bg-transparent cursor-pointer focus:ring-2 focus:ring-accent/20"
+                        className={`text-xs font-semibold rounded-full px-2.5 py-1 cursor-pointer focus:ring-2 focus:ring-accent/20 border-0 ${
+                          inv.status === 'paid'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : inv.status === 'unpaid'
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
                       >
                         <option value="draft">Draft</option>
                         <option value="unpaid">Unpaid</option>
                         <option value="paid">Paid</option>
                       </select>
-                      <StatusBadge status={inv.status} />
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

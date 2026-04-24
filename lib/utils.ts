@@ -5,12 +5,18 @@ export function generateInvoiceNumber(): string {
   return `${prefix}-${year}-${random}`
 }
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  INR: '₹', USD: '$', EUR: '€', GBP: '£',
+  AED: 'AED ', SGD: 'S$', CAD: 'CA$', AUD: 'A$',
+}
+
+export function formatCurrency(amount: number, currency: string = 'INR'): string {
+  const sym = CURRENCY_SYMBOLS[currency] ?? (currency + ' ')
+  const locale = currency === 'INR' ? 'en-IN' : 'en-US'
+  return `${sym}${new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
-  }).format(amount || 0)
+    maximumFractionDigits: 2,
+  }).format(amount || 0)}`
 }
 
 export function formatDate(dateStr: string): string {
